@@ -1,0 +1,7 @@
+{
+  "name": "Classic Script",
+  "author": "Studio bundled",
+  "version": "1.0",
+  "renderer": "glyph_based",
+  "description": "Primary bundled handwriting profile (Segoe Script base, dark blue ink). Glyph-built POC profile."
+}

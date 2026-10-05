@@ -1,0 +1,7 @@
+{
+  "name": "Print Casual",
+  "author": "Studio bundled",
+  "version": "1.0",
+  "renderer": "glyph_based",
+  "description": "Glyph-built profile from samples (95 chars, 3 variants). Builder output - not a trained neural model."
+}

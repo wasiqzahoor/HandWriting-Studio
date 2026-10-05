@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.log
+.data/
+.DS_Store
+Thumbs.db
+output/*.pdf
+output/demo_*.png
+output/test_*.png
+output/fontonly_*.png
+.venv/
+venv/
