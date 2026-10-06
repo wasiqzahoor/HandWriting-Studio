@@ -47,6 +47,11 @@ class DocumentCreatorPage(QWidget):
         self.zoom = None      # None = fit whole page in view
         self.info = {}
         self.worker = None
+        self.editor = None    # inline page editor overlay
+        self.editor_entry = None
+        self.editor_cancelled = False
+        self.hover_line = None
+        self._disp_factor = 1.0
 
         root = QVBoxLayout(self)
         root.setContentsMargins(22, 18, 22, 18)
@@ -222,16 +227,44 @@ class DocumentCreatorPage(QWidget):
                   self.btn_next):
             b.setEnabled(False)
         ml.addLayout(tools)
-        self.view = QLabel("Press Generate to render a preview.")
+        # Centered page holder: the page keeps its aspect, gets even margins
+        # on all sides and is never clipped by the frame. A soft shadow
+        # lifts it off the surface like a real sheet of paper.
+        self.view = QLabel("Press Generate to render a preview.\n\n"
+                           "Tip: after rendering, click any line on the page "
+                           "to edit it right there.")
         self.view.setObjectName("docframe")
         self.view.setAlignment(Qt.AlignCenter)
         self.view.setMinimumSize(360, 520)
+        self.view.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.view.setCursor(Qt.ArrowCursor)
+        from PySide6.QtWidgets import QGraphicsDropShadowEffect
+        shadow = QGraphicsDropShadowEffect(self.view)
+        shadow.setBlurRadius(28)
+        shadow.setOffset(0, 6)
+        shadow.setColor(Qt.gray)
+        self.view.setGraphicsEffect(shadow)
+        self.view.installEventFilter(self)
+        self.view.setMouseTracking(True)
+        holder = QWidget()
+        holder_layout = QVBoxLayout(holder)
+        holder_layout.setContentsMargins(18, 18, 18, 18)
+        holder_layout.setSpacing(0)
+        holder_layout.addWidget(self.view, 0, Qt.AlignCenter)
         sc = QScrollArea()
         sc.setWidgetResizable(True)
-        sc.setWidget(self.view)
+        sc.setWidget(holder)
         sc.viewport().installEventFilter(self)
         self.preview_scroll = sc
         ml.addWidget(sc, 1)
+        # hover highlight + inline editor live on the page itself
+        self.hover_frame = QFrame(self.view)
+        self.hover_frame.setStyleSheet(
+            "background: rgba(230,57,70,14);"
+            "border: 2px solid rgba(230,57,70,220); border-radius: 4px;")
+        self.hover_frame.hide()
+        self.hover_line = None
+        self.editor = None
         split.addWidget(mid)
         split.setSizes([380, 620])
         split.setStretchFactor(1, 1)
@@ -540,13 +573,14 @@ class DocumentCreatorPage(QWidget):
             return 1.0
         vp = self.preview_scroll.viewport().size()
         img = self.pages[self.page_idx]
-        s = min(max(1, vp.width() - 28) / img.width,
-                max(1, vp.height() - 28) / img.height)
+        s = min(max(1, vp.width() - 52) / img.width,
+                max(1, vp.height() - 52) / img.height)
         return max(0.05, min(s, 2.0))
 
     def _update_preview(self):
         if not self.pages:
             return
+        self._close_editor(commit=False)
         img = self.pages[self.page_idx]
         f = self.zoom if self.zoom is not None else self._fit_factor()
         dw, dh = max(1, int(img.width * f)), max(1, int(img.height * f))
@@ -556,12 +590,150 @@ class DocumentCreatorPage(QWidget):
             bg.paste(prev, mask=prev.split()[-1])
             prev = bg
         self.view.setPixmap(QPixmap.fromImage(ImageQt(prev)))
+        self.view.setFixedSize(dw, dh)
+        self._disp_factor = dw / img.width
         self.lbl_zoom.setText("Fit" if self.zoom is None
                               else f"{int(round(f * 100))}%")
+        self.hover_frame.hide()
+        self.hover_line = None
+        self.view.setCursor(Qt.ArrowCursor)
         self._sync_pager()
+
+    # -------------------------------------------- direct page editing ---
+    def _page_point(self, view_pos):
+        """View coords -> full-res page coords (or None when no page)."""
+        if not self.pages or not self.view.pixmap():
+            return None
+        pm = self.view.pixmap()
+        ox = (self.view.width() - pm.width()) // 2
+        oy = (self.view.height() - pm.height()) // 2
+        px = (view_pos.x() - ox) / self._disp_factor
+        py = (view_pos.y() - oy) / self._disp_factor
+        img = self.pages[self.page_idx]
+        if 0 <= px < img.width and 0 <= py < img.height:
+            return (px, py)
+        return None
+
+    def _line_at(self, page_pt):
+        if page_pt is None:
+            return None
+        px, py = page_pt
+        for entry in self.info.get("map", []):
+            if entry["page"] != self.page_idx:
+                continue
+            x0, y0, x1, y1 = entry["rect"]
+            if x0 - 6 <= px <= x1 + 20 and y0 - 4 <= py <= y1 + 4:
+                return entry
+        return None
+
+    def _show_hover(self, entry):
+        if entry is None:
+            self.hover_frame.hide()
+            self.hover_line = None
+            self.view.setCursor(Qt.ArrowCursor)
+            self.view.setToolTip("")
+            return
+        f = self._disp_factor
+        x0, y0, x1, y1 = entry["rect"]
+        pm = self.view.pixmap()
+        ox = (self.view.width() - pm.width()) // 2
+        oy = (self.view.height() - pm.height()) // 2
+        self.hover_frame.setGeometry(int(ox + x0 * f) - 3, int(oy + y0 * f) - 2,
+                                     int((x1 - x0) * f) + 6,
+                                     int((y1 - y0) * f) + 4)
+        self.hover_frame.show()
+        self.hover_line = entry
+        self.view.setCursor(Qt.IBeamCursor)
+        self.view.setToolTip("Click to edit this line")
+
+    def _open_editor(self, entry):
+        if entry is None or self.editor is not None:
+            return
+        f = self._disp_factor
+        x0, y0, x1, y1 = entry["rect"]
+        pm = self.view.pixmap()
+        ox = (self.view.width() - pm.width()) // 2
+        oy = (self.view.height() - pm.height()) // 2
+        from PySide6.QtWidgets import QTextEdit
+        ed = QTextEdit(self.view)
+        ed.setGeometry(int(ox + x0 * f) - 4, int(oy + y0 * f) - 4,
+                       max(220, int((x1 - x0) * f) + 8),
+                       max(64, int((y1 - y0) * f) + 8))
+        try:
+            fs = max(9, int(self.collect()[0].base_font_size * f))
+        except Exception:
+            fs = 12
+        ed.setStyleSheet(f"background: white; color: #111113; "
+                         f"font-size: {fs}px; border: 2px solid #E63946; "
+                         f"border-radius: 6px; padding: 4px;")
+        paras = (self._area_text(entry["area"]) or "").split("\n")
+        ed.setPlainText(paras[entry["para"]] if entry["para"] < len(paras)
+                        else "")
+        ed.installEventFilter(self)
+        ed.show()
+        ed.setFocus()
+        ed.selectAll()
+        self.editor = ed
+        self.editor_entry = entry
+        self.editor_cancelled = False
+        self.hover_frame.hide()
+
+    def _area_text(self, key):
+        get = self.field_widgets.get(key)
+        try:
+            return get() if get else ""
+        except Exception:
+            return ""
+
+    def _commit_editor(self):
+        if self.editor is None:
+            return
+        entry = self.editor_entry
+        new_para_text = self.editor.toPlainText()
+        key = entry["area"]
+        paras = (self._area_text(key) or "").split("\n")
+        while len(paras) <= entry["para"]:
+            paras.append("")
+        paras[entry["para"]] = new_para_text
+        new_text = "\n".join(paras)
+        w = self._field_widget(key)
+        try:
+            if hasattr(w, "setPlainText"):
+                w.setPlainText(new_text)
+            else:
+                w.setText(new_text)
+        except Exception:
+            pass
+        self._close_editor(commit=False)
+        try:
+            self.win.toast("Line updated - re-rendering page...")
+            self.generate()
+        except (RuntimeError, AttributeError):
+            pass  # shutting down; nothing to re-render into
+
+    def _close_editor(self, commit):
+        if self.editor is None:
+            return
+        if commit:
+            self._commit_editor()
+            return
+        try:
+            self.editor.deleteLater()
+        except Exception:
+            pass
+        self.editor = None
 
     def eventFilter(self, obj, event):
         from PySide6.QtCore import QEvent
+        try:
+            return self._filtered_event(obj, event)
+        except RuntimeError:
+            return False  # widgets torn down during shutdown
+
+    def _filtered_event(self, obj, event):
+        from PySide6.QtCore import QEvent
+        if getattr(self, "preview_scroll", None) is None:
+            return super().eventFilter(obj, event)
         if obj is self.preview_scroll.viewport():
             if event.type() == QEvent.Resize and self.zoom is None \
                     and self.pages:
@@ -572,6 +744,33 @@ class DocumentCreatorPage(QWidget):
                 if steps:
                     self.bump_zoom(1.25 ** steps)
                 return True
+        elif obj is self.view and self.pages:
+            if event.type() == QEvent.MouseMove and self.editor is None:
+                self._show_hover(self._line_at(
+                    self._page_point(event.position().toPoint())))
+            elif event.type() == QEvent.Leave and self.editor is None:
+                self._show_hover(None)
+            elif event.type() == QEvent.MouseButtonPress and \
+                    event.button() == Qt.LeftButton and self.editor is None:
+                entry = self._line_at(
+                    self._page_point(event.position().toPoint()))
+                if entry is not None:
+                    self._open_editor(entry)
+                    return True
+        elif obj is self.editor and self.editor is not None:
+            if event.type() == QEvent.KeyPress:
+                if event.key() in (Qt.Key_Return, Qt.Key_Enter) and \
+                        event.modifiers() & Qt.ControlModifier:
+                    self._close_editor(commit=True)
+                    return True
+                if event.key() == Qt.Key_Escape:
+                    self.editor_cancelled = True
+                    self._close_editor(commit=False)
+                    return True
+            elif event.type() == QEvent.FocusOut:
+                if not getattr(self, "editor_cancelled", False):
+                    self._close_editor(commit=True)
+                    return True
         return super().eventFilter(obj, event)
 
     def refresh(self):

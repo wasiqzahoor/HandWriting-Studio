@@ -139,6 +139,7 @@ class HandwritingEngine:
                 st["spacing"], st["bl_mul"], st["st_mul"], st["stroke"])
 
         pages, overflow = [], False
+        line_map = []  # click-to-edit index: {page, area, para, rect}
 
         from PIL import ImageDraw
         for page_no in range(MAX_PAGES if paginate else 1):
@@ -161,6 +162,21 @@ class HandwritingEngine:
                 pi, wi = job["cursor"]
                 paras = job["paras"]
                 stopped = False
+                lx = None  # open visual line: [x0, y_top, para_idx]
+
+                def _begin():
+                    nonlocal lx
+                    lx = [x, y, pi]
+
+                def _flush(x_end):
+                    nonlocal lx
+                    if lx is not None and x_end > lx[0] + 4:
+                        line_map.append(
+                            {"page": page_no, "area": job["key"],
+                             "para": lx[2],
+                             "rect": (lx[0], lx[1], x_end, lx[1] + line_h)})
+                    lx = None
+
                 while pi < len(paras):
                     words = paras[pi].split()
                     if not words:
@@ -168,12 +184,16 @@ class HandwritingEngine:
                             y += int(line_h * 0.55)
                         pi += 1
                         wi = 0
+                        lx = None
                         continue
+                    if lx is None:
+                        _begin()  # open a new visual line here
                     while wi < len(words):
                         items = style_word(words[wi], fsize)
                         ww = sum(a for _, _, a, _ in items) + st["spacing"] * max(
                             0, len(items) - 1)
                         if x > ax + 2 and x + ww > right:
+                            _flush(x)
                             y += int(line_h * (1.0 if not job["head"] else 0.6))
                             if y + 8 > bottom:
                                 if job["head"] or not paginate:
@@ -184,6 +204,7 @@ class HandwritingEngine:
                                     page_full = True
                                 break
                             x = ax
+                            _begin()
                             continue
                         for g, bo, adv, sp in items:
                             canvas.alpha_composite(g, (int(x), int(y + bo)))
@@ -195,6 +216,7 @@ class HandwritingEngine:
                         break
                     if pi < len(paras) - 1 and any(
                             p.strip() for p in paras[pi + 1:]):
+                        _flush(x)
                         y += line_h
                         if y + 8 > bottom:
                             if job["head"] or not paginate:
@@ -206,9 +228,11 @@ class HandwritingEngine:
                             wi = 0
                             break
                         x = ax
+                        _begin()
                     pi += 1
                     wi = 0
                 else:
+                    _flush(x)
                     job["done"] = True
                 if stopped:
                     job["done"] = True
@@ -249,7 +273,7 @@ class HandwritingEngine:
                 f"profile ({sample_chars}...); fallback rendering was used.")
         info = {"size_px": (W, H), "seed": st["seed"], "ink": gm.ink_color,
                 "renderer": renderer.kind, "overflow": overflow,
-                "profile": profile_id, "pages": len(pages)}
+                "profile": profile_id, "pages": len(pages), "map": line_map}
         return pages, warnings, info
 
     @staticmethod

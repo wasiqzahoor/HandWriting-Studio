@@ -301,6 +301,26 @@ def t_min_size_renders():
     assert _ink_height(img) > 10
 
 
+def t_line_map():
+    _img, _w, info = CTX.documents.render(
+        "four_by_six", {"header": "Alex", "body": "Dear John,\n\nThank you."},
+        "print-casual", {"seed": 1})
+    m = info.get("map", [])
+    assert len(m) >= 3, m
+    areas = {e["area"] for e in m}
+    assert "header" in areas and "body" in areas, areas
+    for e in m:
+        assert set(e) == {"page", "area", "para", "rect"}
+        x0, y0, x1, y1 = e["rect"]
+        assert 0 <= x0 < x1 <= 1200 and 0 <= y0 < y1 <= 1800, e
+        assert e["page"] == 0
+    pages, _, info2 = CTX.documents.render_paginated(
+        "four_by_six", {"header": "", "body": "Word " * 400},
+        "print-casual", {"seed": 1})
+    assert len(pages) > 1
+    assert max(e["page"] for e in info2["map"]) == len(pages) - 1
+
+
 def t_batch_records_isolation():    # one bad record must not stop the good one (processor-level guarantee
     # exercised through the same per-record try/except path)
     from batch_engine.processor import BatchProcessor  # noqa
