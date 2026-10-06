@@ -47,6 +47,15 @@ QTextEdit, QLineEdit, QSpinBox, QComboBox, QDateEdit { background: white;
 QTextEdit:focus, QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
     border: 1px solid #E63946; }
 QComboBox::drop-down { border: none; width: 26px; }
+QComboBox:hover { border: 1px solid #E63946; }
+QComboBox QAbstractItemView { background: white; color: #111113;
+    border: 1px solid #D4D4D8; selection-background-color: #E63946;
+    selection-color: white; outline: none; }
+QComboBox QAbstractItemView::item { padding: 8px 10px; min-height: 20px; }
+QComboBox QAbstractItemView::item:hover { background: #FDE7E9;
+    color: #111113; }
+QListWidget { background: white; color: #111113;
+    border: 1px solid #D4D4D8; }
 QPushButton { border-radius: 8px; padding: 9px 14px; font-weight: 700;
     font-size: 13px; }
 QPushButton#btnPrimary { background: #E63946; color: white; }
@@ -136,6 +145,15 @@ QTextEdit, QLineEdit, QSpinBox, QComboBox { background: #0E0E11;
 QTextEdit:focus, QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
     border: 1px solid #E63946; }
 QComboBox::drop-down { border: none; width: 26px; }
+QComboBox:hover { border: 1px solid #E63946; }
+QComboBox QAbstractItemView { background: #141417; color: #F5F5F7;
+    border: 1px solid #2C2C31; selection-background-color: #E63946;
+    selection-color: white; outline: none; }
+QComboBox QAbstractItemView::item { padding: 8px 10px; min-height: 20px; }
+QComboBox QAbstractItemView::item:hover { background: #2A1518;
+    color: white; }
+QListWidget { background: #0E0E11; color: #F5F5F7;
+    border: 1px solid #2C2C31; }
 QPushButton { border-radius: 8px; padding: 9px 14px; font-weight: 700;
     font-size: 13px; }
 QPushButton#btnPrimary { background: #E63946; color: white; }
@@ -196,11 +214,6 @@ QDialog { background: palette(window); }
 QDialogButtonBox QPushButton {
     background: transparent; border: 1px solid #888893;
     border-radius: 8px; padding: 8px 16px; font-weight: 700; }
-QComboBox QAbstractItemView {
-    border: 1px solid #888893; border-radius: 0px;
-    selection-background-color: #E63946; selection-color: white;
-    outline: none; padding: 4px; }
-QListWidget { border: 1px solid #888893; border-radius: 8px; padding: 4px; }
 QListWidget::item { padding: 5px; border-radius: 4px; }
 QListWidget::item:selected { background: #E63946; color: white; }
 QTableWidget { selection-background-color: rgba(230, 57, 70, 28); }
