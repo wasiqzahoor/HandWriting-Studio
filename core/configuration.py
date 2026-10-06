@@ -4,7 +4,7 @@ import os
 
 DEFAULTS = {
     "default_template": "four_by_six",
-    "default_profile": "classic-script",
+    "default_profile": "print-casual",
     "export_dir": "",
     "dpi": 300,
     "default_variation": 0.6,

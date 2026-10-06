@@ -6,7 +6,7 @@
     40
   ],
   "default_size_px": 42,
-  "spacing_px": 2,
+  "spacing_px": 0,
   "slant": 0.08,
   "builder": "training.builder v1",
   "seed": 21

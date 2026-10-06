@@ -80,7 +80,7 @@ class DocumentCreatorPage(QWidget):
 
         self.sl_size = self._slider(ll, "Size", 20, 64,
                                     ctx.settings.get("default_font_size", 42))
-        self.sl_spacing = self._slider(ll, "Spacing", 0, 12, 2)
+        self.sl_spacing = self._slider(ll, "Spacing", -6, 12, 0)
         self.sl_slant = self._slider(ll, "Slant", -25, 25, 8)
         self.sl_variation = self._slider(
             ll, "Variation", 0, 100,

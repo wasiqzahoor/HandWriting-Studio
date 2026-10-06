@@ -300,7 +300,7 @@ class BatchPage(QWidget):
             f"batch_{datetime.datetime.now():%Y%m%d-%H%M%S}")
         os.makedirs(outdir, exist_ok=True)
         st = {"font_size": self.ctx.settings.get("default_font_size", 42),
-              "spacing": 2, "slant": 0.08,
+              "spacing": 0, "slant": 0.08,
               "variation": self.ctx.settings.get("default_variation", 0.6),
               "seed": 1000, "dpi": self.ctx.settings.get("dpi", 300)}
         name = os.path.basename(self.source_path)

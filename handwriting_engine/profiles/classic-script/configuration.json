@@ -1,7 +1,11 @@
 {
   "base_font": "",
-  "ink": [30, 42, 92],
+  "ink": [
+    30,
+    42,
+    92
+  ],
   "default_size_px": 42,
-  "spacing_px": 2,
+  "spacing_px": 0,
   "slant": 0.08
 }

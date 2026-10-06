@@ -22,6 +22,11 @@ class AppContext:
         self.documents = DocumentService(self.hw, self.templates)
         self.exports = ExportManager(self.db, paths.exports)
         self.log = log
+        # One-time default migration: print-casual is now the bundled
+        # default (cleaner, more document-like). Only migrates users who
+        # never explicitly picked a profile (still on the old default).
+        if self.settings.data.get("default_profile") == "classic-script":
+            self.settings.set("default_profile", "print-casual")
 
     def default_profile_id(self):
         want = self.settings.get("default_profile")
