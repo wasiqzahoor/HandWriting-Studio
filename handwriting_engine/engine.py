@@ -73,9 +73,48 @@ class HandwritingEngine:
                 gm.derive_ink_from_sample(sample)
             except Exception:
                 pass
+        ink_override = settings.get("ink")
+        if ink_override:
+            try:
+                gm.ink_color = (int(ink_override[0]), int(ink_override[1]),
+                                int(ink_override[2]))
+            except Exception:
+                pass
         renderer = st["renderer"]
         W, H = template["canvas_px"]
         line_h = line_height_for(st["size"])
+        page_bg = tuple(template.get("page_bg", (253, 252, 247)))
+        if settings.get("page_white") is True:
+            page_bg = (255, 255, 255)
+        elif settings.get("page_white") is False:
+            page_bg = (253, 252, 247)
+        ruled = settings.get("ruled")
+        if ruled is None:
+            ruled = bool(template.get("ruled", False))
+        rule_color = tuple(template.get("rule_color", (150, 175, 200)) + (255,)) \
+            if len(tuple(template.get("rule_color", (150, 175, 200)))) == 3 \
+            else tuple(template.get("rule_color", (150, 175, 200, 255)))
+
+        def draw_rules(canvas):
+            """Notebook lines under every body-area baseline grid."""
+            if not ruled:
+                return
+            from PIL import ImageDraw as _ID
+            d = _ID.Draw(canvas)
+            for job in jobs:
+                if job["head"]:
+                    continue
+                ax, ay, aw, ah = job["box"]
+                try:
+                    asc, _d = gm.get_font(job["fsize"]).getmetrics()
+                except Exception:
+                    asc = job["fsize"]
+                first = ay + 10 + asc
+                yy = first
+                while yy < ay + ah - 4:
+                    d.line([(ax, yy), (ax + aw, yy)], fill=rule_color,
+                           width=2)
+                    yy += line_height_for(job["fsize"])
 
         jobs = []
         for (key, ax, ay, aw, ah, fsize, is_head) in template["areas"]:
@@ -99,7 +138,8 @@ class HandwritingEngine:
 
         from PIL import ImageDraw
         for page_no in range(MAX_PAGES if paginate else 1):
-            canvas = renderer.make_paper(W, H, st["seed"])
+            canvas = renderer.make_paper(W, H, st["seed"], base=page_bg)
+            draw_rules(canvas)  # ruled lines sit under the ink
             draw = ImageDraw.Draw(canvas)
             page_full = False
             for job in jobs:

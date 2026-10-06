@@ -5,6 +5,7 @@ import random
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                                QLabel, QTextEdit, QLineEdit, QComboBox,
+                               QPushButton, QButtonGroup,
                                QSpinBox, QSlider, QScrollArea, QGroupBox,
                                QFormLayout, QCheckBox, QSizePolicy, QFrame,
                                QFileDialog)
@@ -68,6 +69,8 @@ class DocumentCreatorPage(QWidget):
         self.cmb_template.currentIndexChanged.connect(self._template_changed)
         self.cmb_profile = QComboBox()
         self.cmb_profile.setToolTip("Handwriting style for this document")
+        self.cmb_profile.currentIndexChanged.connect(
+            lambda: self._profile_changed())
         form.addRow("Template:", self.cmb_template)
         form.addRow("Handwriting Profile:", self.cmb_profile)
         ll.addLayout(form)
@@ -79,12 +82,59 @@ class DocumentCreatorPage(QWidget):
         ll.addLayout(self.fields_box)
 
         self.sl_size = self._slider(ll, "Size", 20, 64,
-                                    ctx.settings.get("default_font_size", 42))
+                                    ctx.settings.get("default_font_size", 42),
+                                    suffix_fn=lambda v: f"{v} px \u00b7 "
+                                                       f"{v * 72 // 300} pt")
         self.sl_spacing = self._slider(ll, "Spacing", -6, 12, 0)
         self.sl_slant = self._slider(ll, "Slant", -25, 25, 8)
         self.sl_variation = self._slider(
             ll, "Variation", 0, 100,
             int(ctx.settings.get("default_variation", 0.6) * 100))
+
+        # ---- ink + page ----
+        ink_lbl = QLabel("Ink color")
+        ink_lbl.setProperty("class", "muted")
+        ll.addWidget(ink_lbl)
+        ink_row = QHBoxLayout()
+        ink_row.setSpacing(8)
+        from PySide6.QtWidgets import QButtonGroup
+        self.ink_group = QButtonGroup(self)
+        self.ink_group.setExclusive(True)
+        self.ink = (35, 35, 40)
+        self._ink_custom = False
+        for i, (nm, rgb) in enumerate(
+                [("Black", (35, 35, 40)), ("Blue", (30, 42, 92)),
+                 ("Red", (193, 18, 31)), ("Green", (31, 122, 92))]):
+            b = QPushButton()
+            b.setCheckable(True)
+            b.setFixedSize(30, 30)
+            b.setToolTip(f"{nm} ink")
+            b.setStyleSheet(
+                f"QPushButton {{ background: rgb{rgb}; border-radius: 15px;"
+                f" border: 2px solid transparent; }}"
+                f"QPushButton:checked {{ border: 2px solid #E63946; }}")
+            b.setProperty("ink", rgb)
+            b.clicked.connect(lambda _=False, c=rgb: self._set_ink(c, True))
+            self.ink_group.addButton(b, i)
+            ink_row.addWidget(b)
+        self.ink_group.buttons()[0].setChecked(True)
+        b_custom = ghost_button("Custom...")
+        b_custom.setToolTip("Pick any pen color")
+        b_custom.clicked.connect(self.pick_ink)
+        ink_row.addWidget(b_custom, 1)
+        ll.addLayout(ink_row)
+
+        page_row = QHBoxLayout()
+        page_row.setSpacing(14)
+        from PySide6.QtWidgets import QCheckBox
+        self.ck_ruled = QCheckBox("Ruled lines")
+        self.ck_ruled.setToolTip("Show notebook lines under the text")
+        self.ck_white = QCheckBox("White page")
+        self.ck_white.setToolTip("Pure white paper instead of warm card")
+        page_row.addWidget(self.ck_ruled)
+        page_row.addWidget(self.ck_white)
+        page_row.addStretch(1)
+        ll.addLayout(page_row)
 
         adv = QGroupBox("Advanced Settings")
         adv.setCheckable(True)
@@ -208,14 +258,15 @@ class DocumentCreatorPage(QWidget):
         self._template_changed()
 
     # ------------------------------------------------------------- setup ---
-    def _slider(self, parent_layout, label, lo, hi, val, wrap=False):
+    def _slider(self, parent_layout, label, lo, hi, val, wrap=False,
+                suffix_fn=None):
         row = QHBoxLayout() if wrap else None
         lab = QLabel(label)
         lab.setProperty("class", "muted")
         s = QSlider(Qt.Horizontal)
         s.setRange(lo, hi)
         s.setValue(val)
-        badge = QLabel(str(val))
+        badge = QLabel((suffix_fn(val) if suffix_fn else str(val)))
         badge.setMinimumWidth(34)
         if isinstance(parent_layout, QFormLayout):
             w = QWidget()
@@ -230,9 +281,36 @@ class DocumentCreatorPage(QWidget):
             h.addWidget(s, 1)
             h.addWidget(badge)
             parent_layout.addLayout(h)
-        s.valueChanged.connect(lambda v: badge.setText(str(v)))
+        s.valueChanged.connect(
+            lambda v: badge.setText(suffix_fn(v) if suffix_fn else str(v)))
         setattr(self, f"_sl_{label}", s)
         return s
+
+    def pick_ink(self):
+        from PySide6.QtWidgets import QColorDialog
+        from PySide6.QtGui import QColor
+        cur = QColor(*self.ink)
+        col = QColorDialog.getColor(cur, self, "Pen ink color")
+        if col.isValid():
+            self._set_ink((col.red(), col.green(), col.blue()), True)
+            self.win.toast(f"Ink set to rgb{self.ink}.")
+
+    def _set_ink(self, rgb, custom):
+        self.ink = tuple(rgb)
+        self._ink_custom = bool(custom)
+
+    def _profile_changed(self):
+        if getattr(self, "_ink_custom", False):
+            return
+        try:
+            pid = self.cmb_profile.currentData()
+            prof = self.ctx.profiles.get(pid)
+            ink = tuple(prof.get("config", {}).get("ink", [35, 35, 40]))
+            self._set_ink(ink, False)
+            for b in self.ink_group.buttons():
+                b.setChecked(tuple(b.property("ink")) == tuple(ink))
+        except Exception:
+            pass
 
     def reload_options(self):
         st = self.ctx.settings
@@ -270,6 +348,7 @@ class DocumentCreatorPage(QWidget):
                 pass  # widgets rebuilt below; reapply after template sync
         self._saved_fields = keep_fields
         self._template_changed()
+        self._profile_changed()
         for k, v in (self._saved_fields or {}).items():
             w = self._field_widget(k)
             if w is not None:
@@ -285,7 +364,7 @@ class DocumentCreatorPage(QWidget):
         return self.ctx.templates.get(self.cmb_template.currentData())
 
     def _template_changed(self):
-        # rebuild field editors for the template kind
+        # rebuild field editors + page options for the template
         for i in reversed(range(self.fields_box.count())):
             item = self.fields_box.takeAt(i)
             if item.widget():
@@ -297,16 +376,22 @@ class DocumentCreatorPage(QWidget):
         except Exception:
             return
         self.lbl_size.setText(f"{tpl.width_in} x {tpl.height_in} in")
-        if tpl.kind == "envelope":
-            self._add_field("sender", "Sender:", 3,
-                            "Alex Johnson\n1 Main St\nSpringfield")
-            self._add_field("recipient", "Recipient:", 4,
-                            "John Smith\n123 Oak Ave\nShelbyville")
-        else:
-            self._add_field("header", "Header:", 1, "Alex Johnson")
-            self._add_field("body", "Text:", 8,
-                            "Dear John,\n\nThank you for your message.\n\n"
-                            "Best regards,\nAlex")
+        if getattr(self, "_last_tpl", None) != tpl.template_id:
+            self.ck_ruled.setChecked(bool(tpl.ruled))
+            self.ck_white.setChecked(bool(tpl.page_white))
+            self._last_tpl = tpl.template_id
+        presets = {
+            "header": ("Header:", 1, "Alex Johnson"),
+            "body": ("Text:", 8, "Dear John,\n\nThank you for your message.\n\n"
+                                 "Best regards,\nAlex"),
+            "sender": ("Sender:", 3, "Alex Johnson\n1 Main St\nSpringfield"),
+            "recipient": ("Recipient:", 4, "John Smith\n123 Oak Ave\n"
+                                           "Shelbyville"),
+        }
+        for key in tpl.fields:
+            label, lines, default = presets.get(
+                key, (f"{key.capitalize()}:", 4, ""))
+            self._add_field(key, label, lines, default)
 
     def _add_field(self, key, label, lines, default):
         lab = QLabel(label)
@@ -348,6 +433,9 @@ class DocumentCreatorPage(QWidget):
             "stroke_jitter": self.sl_stroke.value() / 100.0,
             "dpi": self.ctx.settings.get("dpi", 300),
             "sample_path": None,
+            "ink": tuple(self.ink),
+            "ruled": bool(self.ck_ruled.isChecked()),
+            "page_white": bool(self.ck_white.isChecked()),
         }
         return tpl, fields, self.cmb_profile.currentData(), settings
 

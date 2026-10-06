@@ -16,9 +16,15 @@ def thumbnail(template, w=300):
     u_w, u_h = template.canvas_px
     scale = w / u_w
     h = max(120, int(u_h * scale))
-    img = Image.new("RGB", (w, h), (253, 252, 247))
+    bg = (255, 255, 255) if template.page_white else (253, 252, 247)
+    img = Image.new("RGB", (w, h), bg)
     d = ImageDraw.Draw(img)
     geo = template.geometry()
+    if template.ruled:
+        yy = 20.0
+        while yy < h - 6:
+            d.line([(8, yy), (w - 8, yy)], fill=(170, 190, 210), width=1)
+            yy += template.base_font_size * 1.9 * scale
     for key, x, y, ww, hh, _fs, _head in geo["areas"]:
         d.rectangle([x * scale, y * scale, (x + ww) * scale,
                      (y + hh) * scale], outline=(200, 60, 70), width=2)
@@ -58,12 +64,19 @@ class TemplateDialog(QDialog):
         self.fs = QDoubleSpinBox()
         self.fs.setRange(12, 96)
         self.fs.setValue(template.base_font_size if template else 42)
+        from PySide6.QtWidgets import QCheckBox
+        self.ck_ruled = QCheckBox("Ruled lines")
+        self.ck_ruled.setChecked(template.ruled if template else False)
+        self.ck_white = QCheckBox("White page")
+        self.ck_white.setChecked(template.page_white if template else False)
         f.addRow("Name:", self.name)
         f.addRow("Kind:", self.kind)
         f.addRow("Width (in):", self.w)
         f.addRow("Height (in):", self.h)
         f.addRow("Margin (in):", self.mt)
         f.addRow("Base font size:", self.fs)
+        f.addRow("Lines:", self.ck_ruled)
+        f.addRow("Paper:", self.ck_white)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -77,7 +90,8 @@ class TemplateDialog(QDialog):
                         {"top": m, "left": m, "right": m, "bottom": m},
                         ("sender", "recipient")
                         if self.kind.currentText() == "envelope"
-                        else ("header", "body"), builtin, False, self.fs.value())
+                        else ("header", "body"), builtin, False, self.fs.value(),
+                        self.ck_white.isChecked(), self.ck_ruled.isChecked())
 
 
 class TemplatesPage(QWidget):
@@ -121,6 +135,8 @@ class TemplatesPage(QWidget):
         kind = QLabel(f"{t.kind.upper()}  \u00b7  {t.width_in} x "
                       f"{t.height_in} in  \u00b7  fields: "
                       f"{', '.join(t.fields)}"
+                      f"{'  \u00b7  RULED' if t.ruled else ''}"
+                      f"{'  \u00b7  WHITE' if t.page_white else ''}"
                       f"{'  \u00b7  DEFAULT' if t.is_default else ''}"
                       f"{'  \u00b7  built-in' if t.builtin else ''}")
         kind.setProperty("class", "muted")

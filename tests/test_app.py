@@ -217,6 +217,48 @@ def t_multipage_export():
     assert Image.open(pngs[0]).size == (1200, 1800)
 
 
+def t_templates_catalog():
+    ids = [t.template_id for t in CTX.templates.list()]
+    for want in ("four_by_six", "four_by_six_blank", "four_by_six_ruled",
+                 "envelope_10"):
+        assert want in ids, ids
+    blank = CTX.templates.get("four_by_six_blank")
+    assert "header" not in blank.fields
+    assert blank.page_white and not blank.ruled
+    ruled = CTX.templates.get("four_by_six_ruled")
+    assert ruled.ruled and ruled.page_white
+    geo = blank.geometry()
+    assert len(geo["areas"]) == 1 and geo["areas"][0][0] == "body"
+
+
+def t_ruled_and_white():
+    plain, _, _ = CTX.documents.render(
+        "four_by_six_blank", {"body": "Hi"}, "print-casual", {"seed": 1})
+    ruled, _, _ = CTX.documents.render(
+        "four_by_six_ruled", {"header": "H", "body": "Hi"}, "print-casual",
+        {"seed": 1, "ruled": True, "page_white": True})
+    assert ruled.tobytes() != plain.tobytes()
+    import numpy as np
+    px = np.asarray(ruled.convert("RGB"))
+    assert (px[0, 0] == [255, 255, 255]).all(), px[0, 0]  # white page
+    # a rule line exists inside body area (light blue-grey pixels)
+    body = np.asarray(ruled.crop((105, 400, 1095, 1500)).convert("RGB"))
+    blueish = ((body[:, :, 2] > body[:, :, 0] + 8)).mean()
+    assert blueish > 0.0005, blueish
+    # override off -> no rules
+    norule, _, _ = CTX.documents.render(
+        "four_by_six_ruled", {"header": "H", "body": "Hi"}, "print-casual",
+        {"seed": 1, "ruled": False})
+    assert norule.tobytes() != ruled.tobytes()
+
+
+def t_ink_override():
+    _img, _w, info = CTX.documents.render(
+        "four_by_six", {"header": "", "body": "Hi"}, "print-casual",
+        {"seed": 1, "ink": (193, 18, 31)})
+    assert tuple(info["ink"]) == (193, 18, 31), info["ink"]
+
+
 def t_batch_records_isolation():    # one bad record must not stop the good one (processor-level guarantee
     # exercised through the same per-record try/except path)
     from batch_engine.processor import BatchProcessor  # noqa

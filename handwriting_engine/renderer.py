@@ -19,12 +19,14 @@ class GlyphRenderer(HandwritingRenderer):
     def __init__(self, paper_color=(253, 252, 247)):
         self.paper_color = paper_color
 
-    def make_paper(self, w, h, seed):
+    def make_paper(self, w, h, seed, base=None):
         import numpy as np
+        bg = list(base[:3]) if base else list(self.paper_color[:3])
         rng = np.random.default_rng(seed)
-        base = np.full((h, w, 3), list(self.paper_color[:3]), dtype=np.int16)
-        noise = rng.integers(-4, 5, size=(h, w, 1), dtype=np.int16)
-        arr = np.clip(base + noise, 0, 255).astype(np.uint8)
+        base_arr = np.full((h, w, 3), bg, dtype=np.int16)
+        amp = 2 if bg == [255, 255, 255] else 4
+        noise = rng.integers(-amp, amp + 1, size=(h, w, 1), dtype=np.int16)
+        arr = np.clip(base_arr + noise, 0, 255).astype(np.uint8)
         return Image.fromarray(arr, "RGB").convert("RGBA")
 
     def style_word(self, gm, word, size_px, rng, variation, slant, spacing,
