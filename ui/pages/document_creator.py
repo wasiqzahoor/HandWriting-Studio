@@ -29,9 +29,9 @@ class RenderWorker(QThread):
     def run(self):
         try:
             tid, fields, pid, st = self.args
-            img, warnings, info = self.ctx.documents.render(
+            pages, warnings, info = self.ctx.documents.render_paginated(
                 tid, fields, pid, st)
-            self.done.emit(img, warnings, info)
+            self.done.emit(pages, warnings, info)
         except Exception as e:
             self.failed.emit(f"{type(e).__name__}: {e}")
 
@@ -41,7 +41,9 @@ class DocumentCreatorPage(QWidget):
         super().__init__()
         self.ctx = ctx
         self.win = win
-        self.image = None
+        self.pages = []       # full-res PIL pages of last render
+        self.page_idx = 0
+        self.zoom = None      # None = fit whole page in view
         self.info = {}
         self.worker = None
 
@@ -125,6 +127,51 @@ class DocumentCreatorPage(QWidget):
         self.lbl_size.setProperty("class", "sizebadge")
         cap.addWidget(self.lbl_size)
         ml.addLayout(cap)
+        # zoom + pager toolbar
+        tools = QHBoxLayout()
+        tools.setSpacing(6)
+        self.btn_zout = ghost_button("\u2212")
+        self.btn_zout.setFixedWidth(38)
+        self.btn_zout.setToolTip("Zoom out (Ctrl+-)")
+        self.btn_zout.setShortcut("Ctrl+-")
+        self.btn_zout.clicked.connect(lambda: self.bump_zoom(1 / 1.25))
+        self.lbl_zoom = QLabel("Fit")
+        self.lbl_zoom.setMinimumWidth(52)
+        self.lbl_zoom.setAlignment(Qt.AlignCenter)
+        self.lbl_zoom.setProperty("class", "sizebadge")
+        self.btn_zin = ghost_button("+")
+        self.btn_zin.setFixedWidth(38)
+        self.btn_zin.setToolTip("Zoom in (Ctrl+=), Ctrl+wheel works too")
+        self.btn_zin.setShortcut("Ctrl+=")
+        self.btn_zin.clicked.connect(lambda: self.bump_zoom(1.25))
+        self.btn_fit = ghost_button("Fit")
+        self.btn_fit.setToolTip("Fit whole page in view (Ctrl+0)")
+        self.btn_fit.setShortcut("Ctrl+0")
+        self.btn_fit.clicked.connect(self.zoom_fit)
+        tools.addWidget(self.btn_zout)
+        tools.addWidget(self.lbl_zoom)
+        tools.addWidget(self.btn_zin)
+        tools.addWidget(self.btn_fit)
+        tools.addStretch(1)
+        self.btn_prev = ghost_button("\u25c0")
+        self.btn_prev.setFixedWidth(38)
+        self.btn_prev.setToolTip("Previous page")
+        self.btn_prev.clicked.connect(lambda: self.turn_page(-1))
+        self.lbl_page = QLabel("—")
+        self.lbl_page.setMinimumWidth(86)
+        self.lbl_page.setAlignment(Qt.AlignCenter)
+        self.lbl_page.setProperty("class", "sizebadge")
+        self.btn_next = ghost_button("\u25b6")
+        self.btn_next.setFixedWidth(38)
+        self.btn_next.setToolTip("Next page")
+        self.btn_next.clicked.connect(lambda: self.turn_page(1))
+        tools.addWidget(self.btn_prev)
+        tools.addWidget(self.lbl_page)
+        tools.addWidget(self.btn_next)
+        for b in (self.btn_zout, self.btn_zin, self.btn_fit, self.btn_prev,
+                  self.btn_next):
+            b.setEnabled(False)
+        ml.addLayout(tools)
         self.view = QLabel("Press Generate to render a preview.")
         self.view.setObjectName("docframe")
         self.view.setAlignment(Qt.AlignCenter)
@@ -132,6 +179,8 @@ class DocumentCreatorPage(QWidget):
         sc = QScrollArea()
         sc.setWidgetResizable(True)
         sc.setWidget(self.view)
+        sc.viewport().installEventFilter(self)
+        self.preview_scroll = sc
         ml.addWidget(sc, 1)
         split.addWidget(mid)
         split.setSizes([380, 620])
@@ -319,24 +368,24 @@ class DocumentCreatorPage(QWidget):
         self.worker.failed.connect(self._failed)
         self.worker.start()
 
-    def _done(self, img, warnings, info):
+    def _done(self, pages, warnings, info):
         self.btn_gen.setEnabled(True)
         self.btn_gen.setText("Generate Preview")
-        self.image = img
+        self.pages = pages
+        self.page_idx = 0
+        self.zoom = None  # None = fit whole page
         self.info = info
-        prev = img.copy()
-        prev.thumbnail((520, 780))
-        if prev.mode == "RGBA":
-            bg = Image.new("RGB", prev.size, (255, 255, 255))
-            bg.paste(prev, mask=prev.split()[-1])
-            prev = bg
-        self.view.setPixmap(QPixmap.fromImage(ImageQt(prev)))
-        self.btn_pdf.setEnabled(True)
-        self.btn_png.setEnabled(True)
+        self._update_preview()
+        for b in (self.btn_pdf, self.btn_png, self.btn_zout, self.btn_zin,
+                  self.btn_fit, self.btn_prev, self.btn_next):
+            b.setEnabled(True)
+        self._sync_pager()
         for w in warnings:
             self.win.toast(w, "warn")
         if not warnings:
-            self.win.toast("Document generated successfully.")
+            n = len(pages)
+            self.win.toast(f"Document generated successfully "
+                           f"({n} page{'s' if n > 1 else ''}).")
         self.ctx.db.add_document(
             f"{info.get('template', 'doc')}_{info['seed']}",
             info.get("template", ""), info.get("profile", ""),
@@ -348,7 +397,7 @@ class DocumentCreatorPage(QWidget):
         self.win.toast(f"Render failed: {msg}", "error")
 
     def export(self, formats):
-        if self.image is None:
+        if not self.pages:
             self.win.toast("Generate a preview first.", "warn")
             return
         st = self.ctx.settings
@@ -360,11 +409,82 @@ class DocumentCreatorPage(QWidget):
             tpl.template_id, pid, settings["seed"], "x").rsplit(".", 1)[0]
         try:
             paths = self.ctx.exports.export(
-                self.image, self.info["size_in"], outdir, base, formats,
+                self.pages, self.info["size_in"], outdir, base, formats,
                 doc_type="document", template=tpl.template_id, profile=pid)
             self.win.toast(f"Exported: {', '.join(os.path.basename(p) for p in paths)}")
         except Exception as e:
             self.win.toast(f"Export failed: {e}", "error")
+
+    # ------------------------------------------------- pager / zoom ---
+    def _sync_pager(self):
+        n = len(self.pages)
+        self.lbl_page.setText(f"{self.page_idx + 1} / {n}" if n else "—")
+        multi = n > 1
+        self.btn_prev.setEnabled(multi and self.page_idx > 0)
+        self.btn_next.setEnabled(multi and self.page_idx < n - 1)
+
+    def turn_page(self, delta):
+        if not self.pages:
+            return
+        self.page_idx = max(0, min(len(self.pages) - 1,
+                                   self.page_idx + delta))
+        self._update_preview()
+        self._sync_pager()
+
+    def bump_zoom(self, factor):
+        if not self.pages:
+            return
+        cur = self._current_factor()
+        self.zoom = max(0.15, min(4.0, cur * factor))
+        self._update_preview()
+
+    def zoom_fit(self):
+        self.zoom = None
+        self._update_preview()
+
+    def _current_factor(self):
+        if self.zoom is not None:
+            return self.zoom
+        return self._fit_factor()
+
+    def _fit_factor(self):
+        if not self.pages:
+            return 1.0
+        vp = self.preview_scroll.viewport().size()
+        img = self.pages[self.page_idx]
+        s = min(max(1, vp.width() - 28) / img.width,
+                max(1, vp.height() - 28) / img.height)
+        return max(0.05, min(s, 2.0))
+
+    def _update_preview(self):
+        if not self.pages:
+            return
+        img = self.pages[self.page_idx]
+        f = self.zoom if self.zoom is not None else self._fit_factor()
+        dw, dh = max(1, int(img.width * f)), max(1, int(img.height * f))
+        prev = img.resize((dw, dh), Image.LANCZOS)
+        if prev.mode == "RGBA":
+            bg = Image.new("RGB", prev.size, (255, 255, 255))
+            bg.paste(prev, mask=prev.split()[-1])
+            prev = bg
+        self.view.setPixmap(QPixmap.fromImage(ImageQt(prev)))
+        self.lbl_zoom.setText("Fit" if self.zoom is None
+                              else f"{int(round(f * 100))}%")
+        self._sync_pager()
+
+    def eventFilter(self, obj, event):
+        from PySide6.QtCore import QEvent
+        if obj is self.preview_scroll.viewport():
+            if event.type() == QEvent.Resize and self.zoom is None \
+                    and self.pages:
+                self._update_preview()
+            elif event.type() == QEvent.Wheel and self.pages and \
+                    event.modifiers() & Qt.ControlModifier:
+                steps = event.angleDelta().y() / 120.0
+                if steps:
+                    self.bump_zoom(1.25 ** steps)
+                return True
+        return super().eventFilter(obj, event)
 
     def refresh(self):
         self.reload_options()

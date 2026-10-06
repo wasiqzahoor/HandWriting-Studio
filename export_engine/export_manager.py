@@ -2,7 +2,7 @@
 import datetime
 import os
 
-from export_engine.pdf_exporter import export_pdf
+from export_engine.pdf_exporter import export_pdf_pages
 from export_engine.image_exporter import export_png, export_jpeg
 
 
@@ -19,28 +19,32 @@ class ExportManager:
         return (pattern.format(template=template_id, profile=profile_id,
                                seed=seed, date=date, name=safe) + f".{ext}")
 
-    def export(self, image, size_in, outdir, basename, formats,
+    def export(self, images, size_in, outdir, basename, formats,
                doc_type="document", template="", profile=""):
-        """formats: subset of ('pdf','png','jpg'). Returns [paths]."""
+        """images: one PIL image or list. formats: subset of pdf/png/jpg."""
+        if not isinstance(images, (list, tuple)):
+            images = [images]
         os.makedirs(outdir, exist_ok=True)
         w_in, h_in = size_in
+        multi = len(images) > 1
         paths = []
         if "pdf" in formats:
             p = os.path.join(outdir, basename + ".pdf")
-            export_pdf(image, p, w_in, h_in)
+            export_pdf_pages(images, p, w_in, h_in)
             paths.append(p)
             self.db.add_export(os.path.basename(p), doc_type, template,
-                               profile, "pdf", "done", p)
-        if "png" in formats:
-            p = os.path.join(outdir, basename + ".png")
-            export_png(image, p)
-            paths.append(p)
-            self.db.add_export(os.path.basename(p), doc_type, template,
-                               profile, "png", "done", p)
-        if "jpg" in formats:
-            p = os.path.join(outdir, basename + ".jpg")
-            export_jpeg(image, p)
-            paths.append(p)
-            self.db.add_export(os.path.basename(p), doc_type, template,
-                               profile, "jpg", "done", p)
+                               profile, f"pdf/{len(images)}p", "done", p)
+        for fmt in ("png", "jpg"):
+            if fmt in formats:
+                for i, img in enumerate(images):
+                    suffix = f"_p{i + 1}" if multi else ""
+                    p = os.path.join(outdir, f"{basename}{suffix}.{fmt}")
+                    if fmt == "png":
+                        export_png(img, p)
+                    else:
+                        export_jpeg(img, p)
+                    paths.append(p)
+                    self.db.add_export(
+                        os.path.basename(p), doc_type, template, profile,
+                        fmt, "done", p)
         return paths

@@ -64,11 +64,11 @@ class BatchProcessor(QThread):
                               for f, col in self.mapping.items()}
                     st = dict(self.settings)
                     st["seed"] = base_seed + rec["idx"]  # unique yet
-                    img, warnings, info = self.ctx.documents.render(
+                    pages, warnings, info = self.ctx.documents.render_paginated(
                         self.template_id, fields, self.profile_id, st)
                     stem = f"record_{rec['idx'] + 1:03d}"
                     outs = self.ctx.exports.export(
-                        img, info["size_in"], self.outdir, stem,
+                        pages, info["size_in"], self.outdir, stem,
                         self.formats, doc_type="batch",
                         template=self.template_id, profile=self.profile_id)
                     if warnings:

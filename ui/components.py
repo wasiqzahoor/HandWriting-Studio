@@ -137,7 +137,7 @@ class Toast(QLabel):
         self.deleteLater()
 
     @staticmethod
-    def show(parent, message, kind="ok"):
+    def notify(parent, message, kind="ok"):
         try:
             if Toast._current is not None:
                 Toast._current.hide()

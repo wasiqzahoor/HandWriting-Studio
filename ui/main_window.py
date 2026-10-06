@@ -134,4 +134,4 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(NAV[index][0])
 
     def toast(self, message, kind="ok"):
-        Toast.show(self, message, kind)
+        Toast.notify(self, message, kind)

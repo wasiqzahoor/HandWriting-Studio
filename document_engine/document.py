@@ -12,7 +12,7 @@ class DocumentService:
         self.templates = template_manager
 
     def render(self, template_id, fields, profile_id, settings):
-        """-> (PIL image, warnings, info with physical size)."""
+        """Single page -> (PIL image, warnings, info with physical size)."""
         tpl = self.templates.get(template_id)
         dpi = int(settings.get("dpi", tpl.dpi))
         geo = tpl.geometry(dpi)  # canvas_px + areas
@@ -22,3 +22,15 @@ class DocumentService:
                      "size_in": (tpl.width_in, tpl.height_in),
                      "size_pt": Units.page_pt(tpl.width_in, tpl.height_in)})
         return img, warnings, info
+
+    def render_paginated(self, template_id, fields, profile_id, settings):
+        """Multi page -> ([PIL images], warnings, info with physical size)."""
+        tpl = self.templates.get(template_id)
+        dpi = int(settings.get("dpi", tpl.dpi))
+        geo = tpl.geometry(dpi)
+        pages, warnings, info = self.hw.render_document_paginated(
+            geo, fields, profile_id, settings)
+        info.update({"template": template_id, "dpi": dpi,
+                     "size_in": (tpl.width_in, tpl.height_in),
+                     "size_pt": Units.page_pt(tpl.width_in, tpl.height_in)})
+        return pages, warnings, info

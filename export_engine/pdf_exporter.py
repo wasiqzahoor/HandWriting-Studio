@@ -8,7 +8,14 @@ from document_engine.dimensions import Units
 
 
 def export_pdf(pil_image, path, width_in, height_in, title="Handwriting Studio"):
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    return export_pdf_pages([pil_image], path, width_in, height_in, title)
+
+
+def export_pdf_pages(images, path, width_in, height_in,
+                     title="Handwriting Studio"):
+    """One PDF page per image, every page the exact physical size."""
+    import os as _os
+    _os.makedirs(_os.path.dirname(_os.path.abspath(path)), exist_ok=True)
     w_pt, h_pt = Units.page_pt(width_in, height_in)
     c = rl_canvas.Canvas(path, pagesize=(w_pt, h_pt))
     c.setTitle(title)
@@ -16,15 +23,15 @@ def export_pdf(pil_image, path, width_in, height_in, title="Handwriting Studio")
         tmp_path = tmp.name
     try:
         from PIL import Image as _I
-        img = pil_image
-        if img.mode == "RGBA":
-            bg = _I.new("RGB", img.size, (255, 255, 255))
-            bg.paste(img, mask=img.split()[-1])
-            img = bg
-        img.save(tmp_path, "PNG", dpi=(300, 300))
-        c.drawImage(ImageReader(tmp_path), 0, 0, width=w_pt, height=h_pt,
-                    preserveAspectRatio=False, anchor="c")
-        c.showPage()
+        for img in images:
+            if img.mode == "RGBA":
+                bg = _I.new("RGB", img.size, (255, 255, 255))
+                bg.paste(img, mask=img.split()[-1])
+                img = bg
+            img.save(tmp_path, "PNG", dpi=(300, 300))
+            c.drawImage(ImageReader(tmp_path), 0, 0, width=w_pt, height=h_pt,
+                        preserveAspectRatio=False, anchor="c")
+            c.showPage()
         c.save()
     finally:
         try:

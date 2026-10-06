@@ -176,8 +176,48 @@ def t_invalid_source():
         pass
 
 
-def t_batch_records_isolation():
-    # one bad record must not stop the good one (processor-level guarantee
+def t_pagination():
+    long_text = "\n\n".join(
+        f"Paragraph {i}: Thank you for your message, I hope you are well."
+        for i in range(12))
+    pages, warnings, info = CTX.documents.render_paginated(
+        "four_by_six", {"header": "Alex", "body": long_text},
+        "classic-script", {"seed": 9})
+    assert len(pages) > 1, f"expected multiple pages, got {len(pages)}"
+    assert not info["overflow"], warnings
+    assert all(p.size == (1200, 1800) for p in pages)
+    # deterministic across pages
+    pages2, _, _ = CTX.documents.render_paginated(
+        "four_by_six", {"header": "Alex", "body": long_text},
+        "classic-script", {"seed": 9})
+    assert [p.tobytes() for p in pages] == [p.tobytes() for p in pages2]
+    # short text still single page
+    one, _, _ = CTX.documents.render_paginated(
+        "four_by_six", {"header": "A", "body": "Hi"}, "classic-script",
+        {"seed": 1})
+    assert len(one) == 1
+
+
+def t_multipage_export():
+    from export_engine.export_manager import ExportManager
+    pages, _, info = CTX.documents.render_paginated(
+        "four_by_six", {"header": "A",
+                        "body": ("Long line here. " * 40 + "\n\n") * 6},
+        "classic-script", {"seed": 2})
+    assert len(pages) > 1
+    d = tempfile.mkdtemp()
+    mgr = ExportManager(CTX.db, d)
+    paths = mgr.export(pages, info["size_in"], d, "multi", ["pdf", "png"],
+                       doc_type="document", template="four_by_six",
+                       profile="classic-script")
+    pdfs = [p for p in paths if p.endswith(".pdf")]
+    pngs = [p for p in paths if p.endswith(".png")]
+    assert len(pdfs) == 1 and len(pngs) == len(pages), paths
+    from PIL import Image
+    assert Image.open(pngs[0]).size == (1200, 1800)
+
+
+def t_batch_records_isolation():    # one bad record must not stop the good one (processor-level guarantee
     # exercised through the same per-record try/except path)
     from batch_engine.processor import BatchProcessor  # noqa
     assert BatchProcessor is not None
