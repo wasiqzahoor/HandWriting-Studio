@@ -35,6 +35,16 @@ def check(name, fn):
 
 
 # ---- handwriting engine ----
+def t_profiles_catalog():
+    ids = CTX.profiles.list_ids()
+    for want in ("classic-script", "print-casual", "lucida-hand",
+                 "brush-script", "french-script", "comic-casual"):
+        assert want in ids, ids
+    for pid in ids:
+        p = CTX.profiles.get(pid)
+        assert len(p["supported"]) >= 70, (pid, len(p["supported"]))
+
+
 def t_profile_loading():
     ids = CTX.profiles.list_ids()
     assert "classic-script" in ids, ids
@@ -257,6 +267,38 @@ def t_ink_override():
         "four_by_six", {"header": "", "body": "Hi"}, "print-casual",
         {"seed": 1, "ink": (193, 18, 31)})
     assert tuple(info["ink"]) == (193, 18, 31), info["ink"]
+
+
+def _ink_height(img):
+    import numpy as np
+    g = np.asarray(img.convert("RGB")).astype(int)
+    bg = np.array([253, 252, 247])
+    mask = (abs(g - bg).sum(axis=2) > 36)
+    ys = np.where(mask.any(axis=1))[0]
+    return int(ys.max() - ys.min()) if len(ys) else 0
+
+
+def t_font_size_scaling():
+    kw = dict(template="four_by_six",
+              fields={"header": "Alex", "body": "Hello John, thank you"},
+              profile="print-casual")
+    small, _, _ = CTX.documents.render(kw["template"], kw["fields"],
+                                       kw["profile"], {"seed": 5,
+                                                       "font_size": 12})
+    big, _, _ = CTX.documents.render(kw["template"], kw["fields"],
+                                     kw["profile"], {"seed": 5,
+                                                     "font_size": 56})
+    assert small.size == big.size == (1200, 1800)
+    assert _ink_height(small) < _ink_height(big), \
+        (_ink_height(small), _ink_height(big))
+
+
+def t_min_size_renders():
+    img, warnings, _info = CTX.documents.render(
+        "four_by_six", {"header": "Tiny", "body": "Small size test. " * 40},
+        "print-casual", {"seed": 1, "font_size": 8})
+    assert img.size == (1200, 1800)
+    assert _ink_height(img) > 10
 
 
 def t_batch_records_isolation():    # one bad record must not stop the good one (processor-level guarantee

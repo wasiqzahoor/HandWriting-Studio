@@ -1,0 +1,13 @@
+{
+  "base_font": "C:\\Windows\\Fonts\\comic.ttf",
+  "ink": [
+    45,
+    55,
+    70
+  ],
+  "default_size_px": 42,
+  "spacing_px": 2,
+  "slant": 0.08,
+  "builder": "training.builder v1",
+  "seed": 34
+}

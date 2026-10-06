@@ -50,6 +50,7 @@ class Template:
         geo["page_bg"] = self.page_bg
         geo["ruled"] = self.ruled
         geo["rule_color"] = self.rule_color
+        geo["base_font_size"] = self.base_font_size
         return geo
 
     def _card_geometry(self, cx, cy, cw, W, H, m):

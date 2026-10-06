@@ -62,7 +62,7 @@ class SettingsPage(QWidget):
         self.sl_var.setRange(0, 100)
         self.sl_var.setValue(int(st.get("default_variation", 0.6) * 100))
         self.spin_size = QSpinBox()
-        self.spin_size.setRange(20, 64)
+        self.spin_size.setRange(8, 72)
         self.spin_size.setValue(st.get("default_font_size", 42))
         r.addRow("Default DPI:", self.spin_dpi)
         r.addRow("Default variation:", self.sl_var)

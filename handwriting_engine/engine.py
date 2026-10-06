@@ -117,10 +117,14 @@ class HandwritingEngine:
                     yy += line_height_for(job["fsize"])
 
         jobs = []
+        base_fs = max(8, int(template.get("base_font_size",
+                                          st["size"]) or st["size"]))
+        scale = st["size"] / base_fs
         for (key, ax, ay, aw, ah, fsize, is_head) in template["areas"]:
             text = (fields.get(key) or "")
             paras = split_paragraphs(text) if text.strip() else []
-            jobs.append({"key": key, "box": (ax, ay, aw, ah), "fsize": fsize,
+            jobs.append({"key": key, "box": (ax, ay, aw, ah),
+                         "fsize": max(6, int(fsize * scale)),
                          "head": bool(is_head), "paras": paras,
                          "cursor": (0, 0), "done": not paras})
 

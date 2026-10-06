@@ -1,0 +1,13 @@
+{
+  "base_font": "C:\\Windows\\Fonts\\LHANDW.TTF",
+  "ink": [
+    25,
+    35,
+    95
+  ],
+  "default_size_px": 42,
+  "spacing_px": 2,
+  "slant": 0.08,
+  "builder": "training.builder v1",
+  "seed": 31
+}

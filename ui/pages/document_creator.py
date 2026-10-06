@@ -81,7 +81,7 @@ class DocumentCreatorPage(QWidget):
         self.fields_box.setSpacing(8)
         ll.addLayout(self.fields_box)
 
-        self.sl_size = self._slider(ll, "Size", 20, 64,
+        self.sl_size = self._slider(ll, "Size", 8, 72,
                                     ctx.settings.get("default_font_size", 42),
                                     suffix_fn=lambda v: f"{v} px \u00b7 "
                                                        f"{v * 72 // 300} pt")

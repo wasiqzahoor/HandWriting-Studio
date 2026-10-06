@@ -1,0 +1,13 @@
+{
+  "base_font": "C:\\Windows\\Fonts\\FRSCRIPT.TTF",
+  "ink": [
+    120,
+    30,
+    50
+  ],
+  "default_size_px": 42,
+  "spacing_px": 2,
+  "slant": 0.08,
+  "builder": "training.builder v1",
+  "seed": 33
+}
