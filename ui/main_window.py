@@ -9,11 +9,12 @@ from PySide6.QtGui import QPixmap, QShortcut, QKeySequence
 
 from ui.styles import THEMES
 from ui.components import Toast
+from ui.icons import icon as nav_icon
 
-NAV = [("Dashboard", "\u25a6"), ("Document Creator", "\u270e"),
-       ("Templates", "\u25a4"), ("Profiles", "\u25cf"),
-       ("Training", "\u25b2"), ("Batch Jobs", "\u25a3"),
-       ("Exports", "\u2193"), ("Settings", "\u2699")]
+NAV = [("Dashboard", "dashboard"), ("Document Creator", "creator"),
+       ("Templates", "templates"), ("Profiles", "profiles"),
+       ("Training", "training"), ("Batch Jobs", "batch"),
+       ("Exports", "exports"), ("Settings", "settings")]
 
 
 class Sidebar(QFrame):
@@ -50,11 +51,15 @@ class Sidebar(QFrame):
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
         self.buttons = []
-        for i, (name, icon) in enumerate(NAV):
-            b = QPushButton(f"  {icon}   {name}")
+        from PySide6.QtCore import QSize
+        from PySide6.QtGui import QIcon
+        for i, (name, icon_key) in enumerate(NAV):
+            b = QPushButton(f"  {name}")
             b.setObjectName("nav")
             b.setCheckable(True)
             b.setCursor(Qt.PointingHandCursor)
+            b.setIcon(QIcon(nav_icon(icon_key)))
+            b.setIconSize(QSize(19, 19))
             self.group.addButton(b, i)
             lay.addWidget(b)
             self.buttons.append(b)
