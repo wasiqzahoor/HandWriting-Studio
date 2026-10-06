@@ -166,7 +166,7 @@ class DocumentCreatorPage(QWidget):
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)
         left_scroll.setWidget(left)
-        left_scroll.setMinimumWidth(360)
+        left_scroll.setMinimumWidth(340)
         split.addWidget(left_scroll)
 
         # ---- preview ----
@@ -235,7 +235,7 @@ class DocumentCreatorPage(QWidget):
                            "to edit it right there.")
         self.view.setObjectName("docframe")
         self.view.setAlignment(Qt.AlignCenter)
-        self.view.setMinimumSize(360, 520)
+        self.view.setMinimumSize(280, 420)
         self.view.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.view.setCursor(Qt.ArrowCursor)
         from PySide6.QtWidgets import QGraphicsDropShadowEffect

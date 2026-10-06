@@ -2,7 +2,7 @@
 import datetime
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-                               QLabel)
+                               QLabel, QSizePolicy)
 from ui.components import (PageHeader, StatCard, Card, make_table,
                            set_table_rows, EmptyState, primary_button)
 
@@ -36,7 +36,8 @@ class DashboardPage(QWidget):
         self.stat_batch = StatCard("Batch Jobs")
         for s in (self.stat_docs, self.stat_tpl, self.stat_prof,
                   self.stat_batch):
-            stats.addWidget(s)
+            s.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            stats.addWidget(s, 1)
         bl.addLayout(stats)
 
         qa = Card()
@@ -49,9 +50,9 @@ class DashboardPage(QWidget):
                            ("Manage Handwriting", 3), ("Batch Processing", 5)):
             b = primary_button(label) if idx == 1 else _ghost(label)
             b.setMinimumHeight(40)
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             b.clicked.connect(lambda _=False, i=idx: win.goto(i))
-            row.addWidget(b)
-        row.addStretch(1)
+            row.addWidget(b, 1)
         qa.layout().addLayout(row)
         bl.addWidget(qa)
 
@@ -67,9 +68,9 @@ class DashboardPage(QWidget):
         self.table = make_table(["Name", "Template", "Profile", "Created",
                                  "Status"])
         self.table.setMinimumHeight(200)
-        recent.layout().addWidget(self.table)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        recent.layout().addWidget(self.table, 1)
         bl.addWidget(recent, 1)
-        bl.addStretch(1)
         sc.setWidget(body)
         root.addWidget(sc, 1)
         self.refresh()

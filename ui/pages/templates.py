@@ -2,7 +2,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                                QLabel, QDialog, QFormLayout, QLineEdit,
                                QComboBox, QDoubleSpinBox, QDialogButtonBox,
-                               QMessageBox, QScrollArea, QFrame)
+                               QMessageBox, QScrollArea, QFrame, QSizePolicy)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PIL import Image, ImageDraw
@@ -125,13 +125,22 @@ class TemplatesPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         for i, t in enumerate(self.ctx.templates.list()):
-            self.grid.addWidget(self._card(t), i // 2, i % 2)
+            self.grid.addWidget(self._card(t), i, 0)
 
     def _card(self, t):
         c = Card()
+        outer = QHBoxLayout()
+        outer.setSpacing(16)
+        thumb = QLabel()
+        thumb.setAlignment(Qt.AlignCenter)
+        thumb.setFixedWidth(220)
+        thumb.setPixmap(thumbnail(t, w=220))
+        outer.addWidget(thumb)
+        info = QVBoxLayout()
+        info.setSpacing(8)
         title = QLabel(t.name)
         title.setStyleSheet("font-weight: 800; font-size: 15px;")
-        c.layout().addWidget(title)
+        info.addWidget(title)
         kind = QLabel(f"{t.kind.upper()}  \u00b7  {t.width_in} x "
                       f"{t.height_in} in  \u00b7  fields: "
                       f"{', '.join(t.fields)}"
@@ -142,11 +151,8 @@ class TemplatesPage(QWidget):
         kind.setProperty("class", "muted")
         kind.setWordWrap(True)
         kind.setMinimumWidth(20)
-        c.layout().addWidget(kind)
-        thumb = QLabel()
-        thumb.setAlignment(Qt.AlignCenter)
-        thumb.setPixmap(thumbnail(t))
-        c.layout().addWidget(thumb)
+        info.addWidget(kind)
+        info.addStretch(1)
         row = QHBoxLayout()
         row.setSpacing(8)
         use = primary_button("Use")
@@ -159,17 +165,18 @@ class TemplatesPage(QWidget):
         dflt = ghost_button("Set Default")
         dflt.clicked.connect(lambda _=False, tid=t.template_id:
                              self._default(tid))
-        row.addWidget(use)
-        row.addWidget(edit)
-        row.addWidget(dup)
-        row.addWidget(dflt)
+        for b in (use, edit, dup, dflt):
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            row.addWidget(b, 1)
         if not t.builtin:
             dele = danger_button("Delete")
             dele.clicked.connect(lambda _=False, tid=t.template_id:
                                  self._delete(tid))
-            row.addWidget(dele)
-        row.addStretch(1)
-        c.layout().addLayout(row)
+            dele.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            row.addWidget(dele, 1)
+        info.addLayout(row)
+        outer.addLayout(info, 1)
+        c.layout().addLayout(outer)
         return c
 
     def create(self):
